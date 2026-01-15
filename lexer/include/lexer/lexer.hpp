@@ -16,7 +16,7 @@ public:
 		read();
 	}
 
-	token::Token NextToken() {
+	token::Token next_token() {
 		token::Token t;
 
 		skip_whitespace();
@@ -93,7 +93,8 @@ public:
 
 private:
 	void read() noexcept {
-		if (read_position == input.length()) ch = 0;
+		// must: >=
+		if (read_position >= input.length()) ch = 0;
 		else ch = input[read_position];
 
 		position = read_position;

@@ -5,9 +5,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/src ccfiles)
+add_subdirectory(lexer)
+add_subdirectory(parser)
 
 add_subdirectory(test)
-add_executable(monkey main.cc ${ccfiles})
 
-target_include_directories(monkey PRIVATE ${PROJECT_SOURCE_DIR}/include)
+add_executable(monkey main.cc)
+
+target_link_libraries(monkey PRIVATE lexer)
+
+
+

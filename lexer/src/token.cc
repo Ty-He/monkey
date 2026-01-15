@@ -1,5 +1,5 @@
 #include <unordered_map>
-#include "../include/token.hpp"
+#include "lexer/token.hpp"
 
 namespace token {
 

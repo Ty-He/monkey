@@ -2,6 +2,7 @@
 #include <string>
 
 namespace token {
+
 using TokenType = std::string;
 
 struct Token {
@@ -44,5 +45,7 @@ const TokenType IF = "IF";
 const TokenType ELSE = "ELSE";
 const TokenType RETURN = "RETURN";
 
+
 TokenType lookup_ident(std::string ident);
+	
 }
