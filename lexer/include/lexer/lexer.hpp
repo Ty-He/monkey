@@ -23,8 +23,10 @@ public:
 		
 		switch (ch) {
 			case '=': 
-				if (peek() == '=') 
+				if (peek() == '=') {
+					read(); // the first '='
 					t = token::Token{token::EQ, "=="};
+				}
 				else t = make_token(token::ASSIGN, ch);
 				break;
 			case ';': 
@@ -46,8 +48,10 @@ public:
 				t = make_token(token::MINUS, ch);
 				break;
 			case '!':
-				if (peek() == '=')
+				if (peek() == '=') {
+					read(); // '!'
 					t = token::Token{token::NEQ, "!="};
+				}
 				else t = make_token(token::BANG, ch);
 				break;
 			case '/':

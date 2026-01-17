@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <iostream>
+#include <sstream>
 
 #include "lexer/token.hpp"
 
@@ -12,46 +12,49 @@ namespace ast {
 inline namespace v_0_1 {
 
 struct Node {
-	virtual std::string token_literal() = 0;
+	virtual std::string token_literal() const noexcept = 0;
+	virtual std::string to_string() const noexcept = 0;
 	virtual ~Node() = default;
 };
 
-struct Statement: Node {
-	virtual void statement_node() {}
-	// virtual ~Statement() = default;
-};
-struct StmtDeleter {
-	void operator()(Statement* s) const {
-		std::cout << s << " is deleted\n";
-		delete s;
-	} 
-};
-using StmtPtr = std::unique_ptr<Statement, StmtDeleter>;
+struct Statement: Node {};
+using StmtPtr = std::unique_ptr<Statement>;
 
-struct Expression: Node {
-	virtual void expression_node() {}
-};
+struct Expression: Node {};
 using ExpressionPtr = std::unique_ptr<Expression>;
 
 struct Program {
 	std::vector<StmtPtr> statements;
 	// std::vector<std::string> errors;
+	std::string to_string() const noexcept
+	{
+		
+		std::ostringstream out;
+		for (const auto& s: statements) {
+			out << s->to_string();
+		}
+		return out.str();
+	}
 };
 
 // In some areas, Identifier does not generate values.
 // But to stay easy, we use a same struct.
 struct Identifier: Expression {
-	token::Token token;
-	std::string value;
+	token::Token token_;
+	std::string value_;
 
 	Identifier() = default;
 	Identifier(token::Token t, std::string v):
-		token(t), value(v) {}
+		token_(t), value_(v) {}
 
-
-	std::string token_literal()
+	std::string token_literal() const noexcept override
 	{
-		return token.literal;
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		return value_;
 	}
 };
 using IdentifierPtr = std::unique_ptr<Identifier>;
@@ -68,9 +71,19 @@ struct LetStmt : Statement {
 	//   name_(std::unique_ptr<Identifier>(name)),
 	//   value_(std::unique_ptr<Expression>(value)) {}
 
-	std::string token_literal()
+	std::string token_literal() const noexcept override
 	{
 		return token_.literal;
+	}
+	
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << token_.literal << ' ' << name_->to_string() << " = ";
+		if (value_)
+			out << value_->to_string();
+		out << ';';
+		return out.str();
 	}
 };
 
@@ -78,9 +91,19 @@ struct ReturnStmt: Statement {
 	token::Token token_; // return token
 	ExpressionPtr return_value_;
 
-	std::string token_literal()
+	std::string token_literal() const noexcept override
 	{
 		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << token_.literal << ' ';
+		if (return_value_)
+			out << return_value_->to_string();
+		out << ';';
+		return out.str();
 	}
 };
 
@@ -88,9 +111,79 @@ struct ExpressionStmt: Statement {
 	token::Token token_;
 	ExpressionPtr expression_;
 
-	std::string token_literal()
+	std::string token_literal() const noexcept override
 	{
 		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		return expression_ ? expression_->to_string() : "";
+	}
+	
+};
+
+struct IntegerLiteral: Expression {
+	token::Token token_;
+	std::int64_t value_;
+
+	IntegerLiteral() = default;
+	IntegerLiteral(token::Token t, std::int64_t v):
+		token_(t), value_(v) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		return token_.literal;
+	}
+};
+
+struct PrefixExpression: Expression {
+	token::Token token_;
+	std::string operator_;
+	ExpressionPtr right_;
+
+	PrefixExpression() = default;
+	PrefixExpression(token::Token t, std::string op):
+		token_(t), operator_(op) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << '(' << operator_ << right_->to_string() << ')';
+		return out.str();
+	}
+};
+
+struct InfixExpression: Expression {
+	token::Token token_;
+	ExpressionPtr left_;
+	std::string operator_;
+	ExpressionPtr right_;
+
+	InfixExpression() = default;
+	InfixExpression(token::Token t, std::string op, Expression* left):
+		token_(t), operator_(op), left_(left) {}
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << '(' << left_->to_string() << ' ' 
+			<< operator_ << ' ' << right_->to_string() << ')';
+		return out.str();
 	}
 };
 
