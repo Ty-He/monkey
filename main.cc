@@ -1,7 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 
-#include "lexer/repl.hpp"
+#include "repl/repl.hpp"
 
 int main()
 {

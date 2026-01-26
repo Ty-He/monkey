@@ -187,5 +187,132 @@ struct InfixExpression: Expression {
 	}
 };
 
+struct Boolean: Expression {
+	token::Token token_;
+	bool value_;
+
+	Boolean() = default;
+	Boolean(token::Token t, bool v): token_(t), value_(v) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		return token_.literal;
+	}
+};
+
+struct BlockStmt: Statement {
+	token::Token token_;
+	std::vector<StmtPtr> statements_;
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+	
+	std::string to_string() const noexcept override
+	{
+		
+		std::ostringstream out;
+		for (const auto& s: statements_) {
+			out << s->to_string();
+		}
+		return out.str();
+	}
+};
+
+using BlockStmtPtr = std::unique_ptr<BlockStmt>;
+
+struct IfExpression: Expression {
+	token::Token token_;
+	ExpressionPtr cond_;
+	BlockStmtPtr consequence_;
+	BlockStmtPtr alternative_;
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << "if" << cond_->to_string() << ' ' << consequence_->to_string();
+		if (alternative_) {
+			out << " else " << alternative_->to_string();
+		}
+		return out.str();
+	}
+};
+
+struct FunctionLiteral: Expression {
+	using ParamType = Identifier;
+	using Parameters = std::vector<IdentifierPtr>;
+	token::Token token_;
+	Parameters parameters_;
+	BlockStmtPtr body_;
+
+	FunctionLiteral() = default;
+	FunctionLiteral(token::Token t, Parameters&& ps, BlockStmt* body):
+		token_(t), parameters_(std::move(ps)), body_(body) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << token_.literal << '(';
+		// join: BUG: size_t is unsigned
+		if (!parameters_.empty()) {
+			std::size_t n = parameters_.size() - 1;
+			for (std::size_t i = 0; i < n; ++i) {
+				out << parameters_[i]->to_string() << ", ";
+			}
+			out << parameters_[n]->to_string();
+		}
+
+		out << ") " << body_->to_string();
+
+		return out.str();
+	}
+};
+
+struct CallExpression: Expression {
+	token::Token token_;
+	ExpressionPtr fn_;
+	using ArgType = Expression;
+	using Arguments = std::vector<ExpressionPtr>;
+	Arguments args_;
+
+	CallExpression() = default;
+	CallExpression(token::Token t, Expression* fn, Arguments&& args):
+		token_(t), fn_(fn), args_(std::move(args)) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << fn_->to_string() << '(';
+		int n = args_.size() - 1;
+		for (int i = 0; i < n; ++i)
+			out << args_[i]->to_string() << ", ";
+		out << args_[n]->to_string() << ')';
+		return out.str();
+	}
+};
+
 } // namespace v_0_1
 }

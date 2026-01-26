@@ -33,8 +33,8 @@ const TokenType SEMICOLON = ";";
 
 const TokenType LPAREN = "(";
 const TokenType RPAREN = ")";
-const TokenType LBARACE = "{";
-const TokenType RBARACE = "}";
+const TokenType LBRACE = "{";
+const TokenType RBRACE = "}";
 
 // key word
 const TokenType FUNCTION = "FUNCTION";

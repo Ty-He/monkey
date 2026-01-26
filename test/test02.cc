@@ -2,9 +2,102 @@
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
 
-template <class ExpressionImpl>
-void testOne(std::string const& input)
+void printLexer(std::string const& input);
+
+template <typename StmtType>
+void test_stmt(std::vector<std::string> const& inputs)
 {
+	for (auto const& input: inputs) {
+		printLexer(input);
+		parser::Parser<lexer::Lexer> p(new lexer::Lexer(input));
+		auto [program, errors] = p.parse();
+		if (!errors.empty()) {
+			std::cerr << "Fail: parse errors:\n";
+			for (auto const& err: errors) std::cout << err << std::endl;
+			exit(0);
+		}
+
+		if (auto sz = program->statements.size(); sz != 1) {
+			std::cerr << "Fail: unexpected size: " << sz << '\n';
+			std::cerr << program->to_string() << '\n';
+			exit(0);
+		}
+
+		auto* stmt = dynamic_cast<StmtType*>(program->statements[0].get());
+		if (!stmt) {
+			std::cerr << "Fail: cannot dynamic_cast: " << '\n';
+			exit(0);
+		}
+
+		std::cout << stmt->to_string() << std::endl;
+	}
+}
+
+void test_return_stmt()
+{
+	std::vector<std::string> inputs {"return x + a * b;", "return;", "return fn(){};"};
+	test_stmt<ast::ReturnStmt>(inputs);
+	std::cout << "Pass all\n";
+}
+
+void test_let_stmt()
+{
+	std::vector<std::string> inputs {"let x = 5;", "let y = true;", "let foo = y;"};
+	test_stmt<ast::LetStmt>(inputs);
+	std::cout << "Pass all\n";
+}
+
+void printLexer(std::string const& input)
+{
+	// auto l = new lexer::Lexer(R"(
+	// let x  5;
+	// let  = 10;
+	// let 23 2323;
+	// )");
+	auto l = new lexer::Lexer(input);
+
+	for (auto t = l->next_token(); t.token_type != token::END_OF_FILE; t = l->next_token())
+	{
+		std::cout << t.token_type << ' ' << t.literal << std::endl;
+	}
+	std::cout << "==================\n";
+
+	delete l;
+}
+
+void testOpeartorPrecedence()
+{
+	using TS = std::pair<std::string, std::string>;
+	std::vector<TS> inputs{
+		{ "1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)" },
+		{"(5 + 5) * 2", "((5 + 5) * 2)"},
+		{"2 / (5 + 5)", "(2 / (5 + 5))"},
+		{"-(5 + 5)", "(-(5 + 5))"},
+		{"!(true == true)", "(!(true == true))"},
+	};
+
+	for (const auto& [input, expected]: inputs) {
+		parser::Parser<lexer::Lexer> p(new lexer::Lexer(input));
+		auto [program, errors] = p.parse();
+		if (!errors.empty()) {
+			std::cerr << "Fail: parse errors:\n";
+			for (auto const& err: errors) std::cout << err << std::endl;
+			exit(0);
+		}
+
+		if (auto actual = program->to_string(); actual != expected) {
+			std::cerr << "Fail: expected: " << expected << " got = " << actual << '\n';
+			exit(0);
+		}
+	}
+}
+
+template <class ExpressionImpl>
+void testOne(std::string const& input, bool isPrintToken = false)
+{
+	if (isPrintToken) {
+		printLexer(input);
+	}
 	auto l = new lexer::Lexer(input);
 
 	parser::Parser<lexer::Lexer> p(l);
@@ -34,6 +127,89 @@ void testOne(std::string const& input)
 	}
 
 	std::cout << node->to_string() << std::endl;
+}
+
+void testCallExpr()
+{
+	std::vector<std::string> inputs{
+		"add(1, 2 * 3, 4 + 5);"
+	};
+
+	for (const auto& input: inputs) {
+		testOne<ast::CallExpression>(input, true);
+	}
+}
+
+// specialize for debugging
+// template <>
+// void testOne<ast::FunctionLiteral>(std::string const& input)
+// {
+//   auto l = new lexer::Lexer(input);
+//
+//   parser::Parser<lexer::Lexer> p(l);
+//   auto [program, errors] = p.parse();
+//   if (!errors.empty()) {
+//     std::cerr << "Fail: parse errors:\n";
+//     for (auto const& err: errors) std::cout << err << std::endl;
+//     return;
+//   }
+//
+//   if (auto sz = program->statements.size(); sz != 1) {
+//     std::cerr << "Fail: unexpected size: " << sz << '\n';
+//     std::cerr << program->statements[1].get() << '\n';
+//     return;
+//   }
+//
+//   auto* stmt = dynamic_cast<ast::ExpressionStmt*>(program->statements[0].get());
+//   if (!stmt) {
+//     std::cerr << "Fail: dynamic_cast: not a expression\n";
+//     return;
+//   }
+//
+//   auto* node = dynamic_cast<ast::FunctionLiteral*>(stmt->expression_.get());
+//   if (!node) {
+//     std::cerr << "Fail: dynamic_cast: not target impl\n";
+//     return;
+//   }
+//
+//   std::cout << node->to_string() << std::endl;
+// }
+
+void testFnLiteral()
+{
+	std::vector<std::string> inputs{
+		"fn() {}",
+		"fn(x) {}",
+		"fn(x, y) {x + y;}",
+	};
+	for (auto const& input: inputs) {
+		testOne<ast::FunctionLiteral>(input);
+		std::cout << "after " << input << std::endl;
+	}
+}
+
+void testIf()
+{
+	std::vector<std::string> inputs{
+		"if (x < y) {x}", 
+		"if (x < y) {x} else {y}", 
+	};
+	for (auto const& input: inputs) {
+		testOne<ast::IfExpression>(input);
+	}
+	std::cout << "Pass all!" <<  std::endl;
+}
+
+void testBoolean()
+{
+	std::vector<std::string> inputs{
+		"true;", "false;"
+	};
+	for (const auto& input: inputs) {
+		testOne<ast::Boolean>(input);
+		std::cout << "Pass test: " << input << std::endl;
+	}
+
 }
 
 void testInfixMore()
@@ -285,6 +461,7 @@ void testToString()
 	std::cout << ls.to_string() << std::endl;
 }
 
+
 int main() 
 {
 	// testLexer();
@@ -306,8 +483,23 @@ int main()
 	// // testPreExpr();
 	// testIfxExpr();
 
-	testInfixMore();
-	std::cout << "==== testInfixMore pass.\n";
+	// testInfixMore();
+	// std::cout << "==== testInfixMore pass.\n";
+
+
+	// testBoolean();
+	// testOpeartorPrecedence();
+	// std::cout << "testOpeartorPrecedence pass\n";
+
+	// testIf();
+	
+	// testFnLiteral();
+
+	// testCallExpr();
+
+	// test_let_stmt();
+	test_return_stmt();
+
 	// char ch = 0;
 	// std::cout << isdigit(static_cast<unsigned char>(0)) << std::endl;
 	return 0;

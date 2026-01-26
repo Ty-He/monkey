@@ -67,10 +67,10 @@ public:
 				t = make_token(token::GT, ch);
 				break;
 			case '{': 
-				t = make_token(token::LBARACE, ch);
+				t = make_token(token::LBRACE, ch);
 				break;
 			case '}': 
-				t = make_token(token::RBARACE, ch);
+				t = make_token(token::RBRACE, ch);
 				break;
 			case 0:
 				t = make_token(token::END_OF_FILE, ch);
