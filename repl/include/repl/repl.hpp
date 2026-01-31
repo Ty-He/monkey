@@ -2,6 +2,7 @@
 #include <iostream>
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
+#include "eval/eval.hpp"
 
 
 struct repl {
@@ -18,7 +19,11 @@ struct repl {
 				continue;
 			}
 
-			out << program->to_string() << '\n';
+			// out << program->to_string() << '\n';
+			auto evaluated = evaluator::eval<evaluator::eval_handler>(program.get());
+			if (evaluated) {
+				out << evaluated->inspect() << '\n';
+			}
 		}
 	}
 };

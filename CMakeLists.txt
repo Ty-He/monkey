@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(lexer)
 add_subdirectory(parser)
+add_subdirectory(evaluator)
 add_subdirectory(repl)
 
 add_subdirectory(test)
