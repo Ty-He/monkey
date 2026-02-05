@@ -251,14 +251,20 @@ struct IfExpression: Expression {
 
 struct FunctionLiteral: Expression {
 	using ParamType = Identifier;
-	using Parameters = std::vector<IdentifierPtr>;
+	using Parameters = std::shared_ptr<std::vector<IdentifierPtr>>;
+	using Body = std::shared_ptr<BlockStmt>;
 	token::Token token_;
 	Parameters parameters_;
-	BlockStmtPtr body_;
+	Body body_;
 
 	FunctionLiteral() = default;
-	FunctionLiteral(token::Token t, Parameters&& ps, BlockStmt* body):
-		token_(t), parameters_(std::move(ps)), body_(body) {}
+	FunctionLiteral(token::Token t, Parameters::element_type&& ps, BlockStmt* body):
+		token_(t),
+		parameters_(std::make_shared<typename Parameters::element_type>(std::move(ps))),
+		body_(body) {}
+	// FunctionLiteral(FunctionLiteral&& f):
+	//   token_(f.token_), parameters_(std::move(f.parameters_)), body_(std::move(f.body_))
+	// {}
 
 	std::string token_literal() const noexcept override
 	{
@@ -272,16 +278,20 @@ struct FunctionLiteral: Expression {
 		std::ostringstream out;
 		out << token_.literal << '(';
 		// join: BUG: size_t is unsigned
-		if (!parameters_.empty()) {
-			std::size_t n = parameters_.size() - 1;
+		if (parameters_ && !parameters_->empty()) {
+			std::size_t n = parameters_->size() - 1;
 			for (std::size_t i = 0; i < n; ++i) {
-				out << parameters_[i]->to_string() << ", ";
+				out << (*parameters_)[i]->to_string() << ", ";
 			}
-			out << parameters_[n]->to_string();
+			out << (*parameters_)[n]->to_string();
 		}
 
-		out << ") " << body_->to_string();
+		out << ") {";
 
+		if (body_)
+			out	<< body_->to_string();
+
+		out << " }";
 		return out.str();
 	}
 };

@@ -415,7 +415,7 @@ private:
 		// cur_token_ is '}'
 	}
 
-	using _param = ast::FunctionLiteral::Parameters;
+	using _param = ast::FunctionLiteral::Parameters::element_type;
 	std::optional<_param> parse_fn_param()
 	{
 		_param ps;

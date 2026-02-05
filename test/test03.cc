@@ -11,6 +11,10 @@ void testAnObejct(std::string const& input)
 	parser::Parser<lexer::Lexer> p(new lexer::Lexer(input));
 	auto [program, errors] = p.parse();
 	auto b = evaluator::eval(program.get());
+	if (!b) {
+		std::cout << "nullptr\n";
+		return;
+	}
 	std::cout << "type: " <<b->type() << ", inspect: " << b->inspect() << '\n';
 	auto i = dynamic_cast<ObjectImpl*>(b.get());
 	if (!i) throw std::runtime_error{"fail: dynamic_cast ObjectImpl"};
@@ -83,6 +87,76 @@ void testIntInfix()
 		testAnObejct<obj::boolean>(input);
 }
 
+void testIfElse()
+{
+	std::vector inputs {
+		"if (true) {10}",
+		"if (false) {10}",
+		"if (1) {10}",
+		"if (1 < 2) {10}",
+		"if (1 > 2) {10}",
+		"if (1 < 2) {10} else {20}",
+		"if (1 > 2) {10} else {20}",
+		"foobar",
+	};
+	for (auto input: inputs)
+		testAnObejct<obj::integer>(input);
+}
+
+void testReturn()
+{
+	std::vector inputs {
+		"return 10;",
+		"return 10; 9;",
+		"return 2 * 5; 9;",
+		"9; return 2 * 5; 9",
+		"if (10 > 1) { if(10 > 1) { return 10; } return 1;}"
+	};
+	for (auto input: inputs)
+		testAnObejct<obj::integer>(input);
+}
+
+void testError()
+{
+	std::vector inputs {
+		"5 + true;",
+		"5 + true; 5;",
+		"-true",
+		"true + false",
+		"2; true + false; 2",
+		"if (10 > 1) { true + false; }",
+	};
+	for (auto input: inputs)
+		testAnObejct<obj::error>(input);
+}
+
+void testLet()
+{
+	std::vector inputs {
+		"let a = 5; a;",
+		"let a = 5 * 5; a",
+		"let a = 5; let b = a; b;",
+		"let let a = 5; let b = a; let c = a + b + 5; c;",
+	};
+	for (auto input: inputs)
+		testAnObejct<obj::integer>(input);
+}
+
+void testFn()
+{
+	// std::string input{"fn(x) {x + 2;}"};
+	// testAnObejct<typename evaluator::eval_handler::func>(input);
+	std::vector inputs {
+		"let identity = fn(x) {x;}; identity(5);",
+		"let identity = fn(x) { return x;}; identity(5);",
+		"let double = fn(x) { return x * 2;}; double(5);",
+		"let add = fn(x, y) { x + y;}; add(5, 5);",
+		"let add = fn(x, y) { x + y;}; add(5 + 5, add(5, 5));",
+	};
+	for (auto input: inputs)
+		testAnObejct<obj::integer>(input);
+}
+
 
 int main()
 {
@@ -91,7 +165,12 @@ int main()
 		// testBoolean();
 		// testBangOp();
 		// testMinuxPrefix();
-		testIntInfix();
+		// testIntInfix();
+		// testIfElse();
+		// testReturn();
+		// testError();
+		// testLet();
+		testFn();
 	} catch (std::exception& e) {
 		std::cerr << e.what() << '\n';
 	}

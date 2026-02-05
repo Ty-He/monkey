@@ -7,6 +7,7 @@
 
 struct repl {
 	static void start(std::istream& in, std::ostream& out) {
+		auto env = std::make_shared<obj::environment>();
 		for (;;) {
 			std::string input;
 			out << ">> ";
@@ -19,8 +20,9 @@ struct repl {
 				continue;
 			}
 
-			// out << program->to_string() << '\n';
-			auto evaluated = evaluator::eval<evaluator::eval_handler>(program.get());
+			// out << "Program:" << program->to_string() << '\n';
+			auto evaluated = evaluator::eval<evaluator::eval_handler>(program.get(), env);
+			// out << "end of eval\n";
 			if (evaluated) {
 				out << evaluated->inspect() << '\n';
 			}
