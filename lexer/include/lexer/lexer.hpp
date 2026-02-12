@@ -32,6 +32,9 @@ public:
 			case ';': 
 				t = make_token(token::SEMICOLON, ch);
 				break;
+			case ':':
+				t = make_token(token::COLON, ch);
+				break;
 			case '(': 
 				t = make_token(token::LPAREN, ch);
 				break;
@@ -66,11 +69,24 @@ public:
 			case '>':
 				t = make_token(token::GT, ch);
 				break;
+			case '[': 
+				t = make_token(token::LBRACKET, ch);
+				break;
+			case ']': 
+				t = make_token(token::RBRACKET, ch);
+				break;
 			case '{': 
 				t = make_token(token::LBRACE, ch);
 				break;
 			case '}': 
 				t = make_token(token::RBRACE, ch);
+				break;
+			case '"':
+				// TODO support for escapte char ..
+				read(); // for eat the first '"'
+				t = token::Token{token::STRING, read_ident_or_num([](char ch) -> bool {
+						return ch != '"' && ch != 0;
+						})};
 				break;
 			case 0:
 				t = make_token(token::END_OF_FILE, ch);
@@ -119,11 +135,14 @@ private:
 			|| ch == '_';
 	}
 
+	// read from current position, until the next position which check(next position) == false
 	std::string read_ident_or_num(bool (*check)(char)) {
 		int beg = position;
-		do {
-			read();
-		} while (check(ch));
+		// do while cannot deal empty string
+		// do {
+		//   read();
+		// } while (check(ch));
+		while (check(ch)) read();
 		return input.substr(beg, position - beg);
 	}
 

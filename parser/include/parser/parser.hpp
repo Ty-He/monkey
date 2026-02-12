@@ -56,6 +56,15 @@ public:
 		prefix_parse_fns_.emplace(token::FUNCTION, [this] {
 				return this->parse_fn_literal();
 				});
+		prefix_parse_fns_.emplace(token::STRING, [this] {
+				return this->parse_string_literal();
+				});
+		prefix_parse_fns_.emplace(token::LBRACKET, [this] {
+				return this->parse_array_literal();
+				});
+		prefix_parse_fns_.emplace(token::LBRACE, [this] {
+				return this->parse_hashtable_literal();
+				});
 
 		static auto parse_infix_expr = [this](ast::Expression* left) {
 			// cur_token_ is infix operator_
@@ -74,6 +83,9 @@ public:
 		infix_parse_fns_[token::LPAREN] = [this](ast::Expression* fn) {
 				return this->parse_call_expr(fn);
 				};
+		infix_parse_fns_[token::LBRACKET] = [this](ast::Expression* arr) {
+			return this->parse_index_expr(arr);
+		};
 
 	} // Parse()
 
@@ -215,6 +227,7 @@ private:
 		product, // *
 		prefix, // -x, !x
 		call, // fn()
+		index,
 	};
 
 	static inline std::unordered_map<token::TokenType, Precedence> t2p_maps{
@@ -229,6 +242,7 @@ private:
 		{token::ASTERISK, Precedence::product},
 		// '(' for call function, callback is parse_call_expr
 		{token::LPAREN, Precedence::call},
+		{token::LBRACKET, Precedence::index}
 	};
 
 	static Precedence t2p(token::TokenType t) 
@@ -399,7 +413,10 @@ private:
 		}
 		// cur_token_ is '('
 
-		auto ops = parse_fn_param();
+		// auto ops = parse_fn_param();
+		auto ops = parse_list<ast::FunctionLiteral::ParamType>([this]{
+				return new ast::Identifier{cur_token_, cur_token_.literal};
+				});
 		if (!ops) {
 			return nullptr;
 		}
@@ -416,6 +433,7 @@ private:
 	}
 
 	using _param = ast::FunctionLiteral::Parameters::element_type;
+	[[deprecated("use parse_list<> instead")]]
 	std::optional<_param> parse_fn_param()
 	{
 		_param ps;
@@ -461,12 +479,13 @@ private:
 	template<typename T>
 	requires std::same_as<T, ast::FunctionLiteral::ParamType> 
 	|| std::same_as<T, ast::CallExpression::ArgType>
-	std::optional<std::vector<std::unique_ptr<T>>> parse_list(std::function<T*()> get_nx)
+	std::optional<std::vector<std::unique_ptr<T>>>
+	parse_list(std::function<T*()> get_nx, token::TokenType rightEnd = token::RPAREN)
 	{
 		std::vector<std::unique_ptr<T>> ps;
 
 		// void parmeter, not error
-		if (peek_token_is(token::RPAREN)) {
+		if (peek_token_is(rightEnd)) {
 			// skip '('
 			next_token();
 			return ps;
@@ -483,11 +502,61 @@ private:
 			ps.emplace_back(p);
 		}
 
-		if (!expect_peek(token::RPAREN)) {
+		if (!expect_peek(rightEnd)) {
 			// error
 			return std::nullopt;
 		}
 		return ps;
+	}
+
+	ast::Expression* parse_string_literal() {
+		return new ast::StringLiteral{cur_token_, cur_token_.literal};
+	}
+
+	ast::Expression* parse_array_literal() {
+		// cur_token_is '[', fn is array
+		auto arrToken = cur_token_;
+		auto args = parse_list<ast::ArrayLiteral::ElementType>([this] {
+				return this->parse_expr(Precedence::lowest);
+				}, token::RBRACKET);
+		if (!args)
+			return nullptr;
+		return new ast::ArrayLiteral{arrToken, std::move(args.value())};
+	}
+
+	ast::Expression* parse_index_expr(ast::Expression* arr)
+	{
+		// cur_token_is '[', fn is array
+		auto arrToken = cur_token_;
+		next_token();
+		auto* index = parse_expr(Precedence::lowest);
+		if (!expect_peek(token::RBRACKET)) return nullptr;
+		return new ast::IndexExpression{arrToken, arr, index};
+	}
+
+	ast::Expression* parse_hashtable_literal()
+	{
+		// cur_token_is '{'
+		auto hashToken = cur_token_;
+
+		std::vector<ast::HashTableLiteral::Pair> pairs;
+		while (!peek_token_is(token::RBRACE)) {
+			next_token();
+			auto key = ast::ExpressionPtr{ parse_expr(Precedence::lowest) };
+			if (!expect_peek(token::COLON)) return nullptr;
+			// cur_token_is ':'
+			next_token();
+			auto value = ast::ExpressionPtr{ parse_expr(Precedence::lowest) };
+			// next_token();
+			// if (cur_token_is(token::COMMA)) next_token();
+			pairs.emplace_back(move(key), move(value));
+
+			if (peek_token_is(token::RBRACE)) break;
+			if (!expect_peek(token::COMMA)) return nullptr;
+		}
+
+		if (!expect_peek(token::RBRACE)) return nullptr;
+		return new ast::HashTableLiteral{hashToken, std::move(pairs)};
 	}
 
 	using LexerPtr = std::unique_ptr<Lexer>;

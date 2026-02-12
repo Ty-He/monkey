@@ -324,5 +324,110 @@ struct CallExpression: Expression {
 	}
 };
 
+
+struct StringLiteral: Expression {
+	token::Token token_;
+	std::string value_;
+
+	StringLiteral() = default;
+	StringLiteral(token::Token t, std::string const& v):
+		token_(t), value_(v) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		return value_;
+	}
+};
+
+struct ArrayLiteral: Expression {
+	token::Token token_;
+	using ElementType = Expression;
+	// ??? Using shared_ptr for reference type?
+	// Moreover, now ASSIGN is unsupported, so reference is meaningless.
+	using Elements = std::vector<std::unique_ptr<ElementType>>;
+	Elements elements_;
+
+	ArrayLiteral() = default;
+	ArrayLiteral(token::Token t, Elements&& elems):
+		token_(t), elements_(std::move(elems)) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << '[';
+		if (!elements_.empty()) {
+			std::size_t n = elements_.size() - 1;
+			for (std::size_t i = 0; i < n; ++i)
+				out << elements_[i]->to_string() << ", ";
+			out << elements_[n]->to_string();
+		}
+		out << ']';
+		return out.str();
+	}
+};
+
+struct IndexExpression: Expression {
+	token::Token token_;
+	ExpressionPtr left_;
+	ExpressionPtr index_;
+
+	IndexExpression() = default;
+	IndexExpression(token::Token t, Expression* l, Expression* i):
+		token_(t), left_(l), index_(i) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << "(" << left_->to_string() << "[" << index_->to_string() << "])";
+		return out.str();
+	}
+};
+
+struct HashTableLiteral: Expression {
+	token::Token token_; // {
+	using Pair = std::pair<ExpressionPtr, ExpressionPtr>;
+	std::vector<Pair> pairs_;
+
+	HashTableLiteral() = default;
+	HashTableLiteral(token::Token t, std::vector<Pair>&& ps):
+		token_(t), pairs_(std::move(ps)) {}
+
+	std::string token_literal() const noexcept override
+	{
+		return token_.literal;
+	}
+	std::string to_string() const noexcept override
+	{
+		std::ostringstream out;
+		out << '{';
+		if (!pairs_.empty()) {
+			std::size_t n = pairs_.size() - 1;
+			for (std::size_t i = 0; i < n; ++i) {
+				auto const& [k, v] = pairs_[i];
+				out << k->to_string() << ": " << v->to_string() << ", ";
+			}
+			auto const& [k, v] = pairs_[n];
+			out << k->to_string() << ": " << v->to_string();
+		}
+		out << '}';
+		return out.str();
+	}
+};
+
 } // namespace v_0_1
 }

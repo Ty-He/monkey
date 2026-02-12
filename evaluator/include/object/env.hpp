@@ -48,14 +48,14 @@ public:
 		store_.emplace(key, clone_obj(val));
 	}
 
+	static inline auto clone_obj = clone<_clone, obj::object,
+							obj::integer,
+							obj::function<ast::FunctionLiteral, environment>,
+							obj::string,
+							obj::array,
+							obj::hashtable>;
 private:
 	std::unordered_map<std::string, object_ptr> store_;
 	std::shared_ptr<environment> upper_;
-	static inline auto clone_obj = clone<_clone, obj::object,
-							obj::integer, obj::function<ast::FunctionLiteral, environment>>;
-							// obj::boolean,
-							// obj::nil>;
-							// obj::return_value,
-							// obj::error>;
 };
 }

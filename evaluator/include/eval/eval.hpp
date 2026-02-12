@@ -10,7 +10,7 @@ namespace evaluator {
 inline namespace v_0_1 {
 
 template<typename Eval, typename Base>
-	Eval::Ret dispatch(Base*, typename Eval::EnvPtr)
+	Eval::Ret dispatch(Base* b, typename Eval::EnvPtr)
 	{
 		throw std::runtime_error{"dispatch<> is failed"};
 	}
@@ -40,7 +40,11 @@ static auto expr_dispatch = dispatch<EvalHandler, ast::Expression,
 						ast::IfExpression,
 						ast::Identifier,
 						ast::FunctionLiteral,
-						ast::CallExpression>;
+						ast::CallExpression,
+						ast::StringLiteral,
+						ast::ArrayLiteral,
+						ast::IndexExpression,
+						ast::HashTableLiteral>;
 
 // uptr is a unique_ptr returned by eval or dispatch
 #define CheckEvalErr(uptr) if (uptr->type() == obj::ERROR) return uptr
@@ -57,7 +61,7 @@ public:
 	// eval for program is an interface for caller
 	static obj::object_ptr eval(const ast::Program* program, EnvPtr env)
 	{
-		obj::object_ptr res{};
+		obj::object_ptr res {};
 		for (auto const& stmt: program->statements) {
 			res = stmt_dispatch<eval_handler>(stmt.get(), env);
 			if (res->type() == obj::ERROR) return res;
@@ -65,6 +69,7 @@ public:
 				// return value for program
 				return obj::object_ptr{std::move(rv->value_)};
 			}
+			// res.release();
 		}
 		return res;
 	}
@@ -108,30 +113,6 @@ public:
 		return err::make(obj::eval_errc::unknown_operator, pe->operator_ + right->inspect());
 	}
 
-	static obj::object* eval_int_infix(std::string const& op, obj::integer* li, obj::integer* ri)
-	{
-		if (op == "+")
-			return new obj::integer{li->value_ + ri->value_};
-		if (op == "-")
-			return new obj::integer{li->value_ - ri->value_};
-		if (op == "*")
-			return new obj::integer{li->value_ * ri->value_};
-		if (op == "/")
-			return new obj::integer{li->value_ / ri->value_};
-		if (op == "<")
-			return obj::boolean::make(li->value_ < ri->value_);
-		if (op == ">")
-			return obj::boolean::make(li->value_ > ri->value_);
-		if (op == "==")
-			return obj::boolean::make(li->value_ == ri->value_);
-		if (op == "!=")
-			return obj::boolean::make(li->value_ != ri->value_);
-
-		// unsupported operator
-		// return obj::nil::make();
-		return new err{e::unknown_operator, join({li->inspect(), op, ri->inspect()})};
-	}
-
 	static obj::object_ptr eval(const ast::InfixExpression* ie, EnvPtr env) {
 		auto _left = expr_dispatch<eval_handler>(ie->left_.get(), env);
 		CheckEvalErr(_left);
@@ -143,6 +124,12 @@ public:
 			auto* li = static_cast<obj::integer*>(left);
 			auto* ri = static_cast<obj::integer*>(right);
 			return obj::object_ptr{eval_int_infix(ie->operator_, li, ri)};
+		}
+
+		if (left->type() == obj::STRING && right->type() == obj::STRING) {
+			auto* ls = static_cast<obj::string*>(left);
+			auto* rs = static_cast<obj::string*>(right);
+			return obj::object_ptr{eval_string_expr(ie->operator_, ls, rs)};
 		}
 
 		if (left->type() != right->type())
@@ -195,7 +182,11 @@ public:
 	static obj::object_ptr eval(const ast::Identifier* i, EnvPtr env)
 	{
 		auto [val, ok] = env->get(i->value_);
-		return ok ? std::move(val) : err::make(e::identifier_not_defined, i->value_);
+		// return ok ? std::move(val) : err::make(e::identifier_not_defined, i->value_);
+		if (ok) return std::move(val);
+		return builtins.contains(i->value_) ? 
+			obj::object_ptr{ &builtins[i->value_] } :
+			err::make(e::identifier_not_defined, i->value_);
 	}
 
 	static obj::object_ptr eval(const ast::FunctionLiteral* f, EnvPtr env)
@@ -219,18 +210,56 @@ public:
 		}
 
 		func* f = dynamic_cast<func*>(fn.get());
-		if (!f) return err::make(e::not_a_function, fn->inspect());
+		if (f) return call(f, std::move(args));
+		obj::builtin* b = dynamic_cast<obj::builtin*>(fn.get());
+		if (b) return call(b, std::move(args));
+		return err::make(e::not_a_function, fn->inspect());
+	}
 
-		// Env extendEnv(f->env_);
-		auto extendEnv = std::make_shared<Env>(f->env_);
-		for (int i = 0; i < args.size(); ++i)
-			extendEnv->set((*f->parameters_)[i]->value_, args[i].get());
+	static obj::object_ptr eval(const ast::StringLiteral* i, EnvPtr)
+	{
+		return obj::object_ptr{ new obj::string{i->value_} };
+	}
 
-		auto res = eval(f->body_.get(), extendEnv);
-		CheckEvalErr(res);
-		return res->type() == obj::RETURN_VALUE ?
-			obj::object_ptr{ dynamic_cast<obj::return_value*>(res.get())->value_.release() }:
-			std::move(res);
+	static obj::object_ptr eval(const ast::ArrayLiteral* a, EnvPtr env)
+	{
+		obj::array::Elements elems;
+		for (auto const& elem: a->elements_) {
+			auto e = expr_dispatch<eval_handler>(elem.get(), env);
+			CheckEvalErr(e);
+			elems.push_back(std::move(e));
+		}
+		return obj::object_ptr{ new obj::array(std::move(elems), a->to_string())};
+	}
+
+	// index of array shoule return elem ref
+	// but now all var is readonly, so return the deep copy
+	static obj::object_ptr eval(const ast::IndexExpression* i, EnvPtr env)
+	{
+		auto set = expr_dispatch<eval_handler>(i->left_.get(), env);
+		CheckEvalErr(set);
+		auto index = expr_dispatch<eval_handler>(i->index_.get(), env);
+		CheckEvalErr(index);
+
+		if (set->type() == obj::ARRAY && index->type() == obj::INTEGER)
+			return eval_index_arr(set.get(), index.get());
+		if (set->type() == obj::HASHTABLE) {
+			return eval_index_ht(set.get(), index);
+		}
+		return err::make(e::type_mismatch, "cannot index");
+	}
+
+	static obj::object_ptr eval(const ast::HashTableLiteral* h, EnvPtr env)
+	{
+		obj::hashtable::HashTable ht;
+		for (auto const& [ke, ve]: h->pairs_) {
+			auto k = expr_dispatch<eval_handler>(ke.get(), env);
+			CheckEvalErr(k);
+			auto v = expr_dispatch<eval_handler>(ve.get(), env);
+			CheckEvalErr(v);
+			ht.emplace(move(k), move(v));
+		}
+		return obj::object_ptr{new obj::hashtable{move(ht)}};
 	}
 private:
 	// used for cond in if
@@ -252,6 +281,7 @@ private:
 		return res;
 	}
 
+	// TODO use macro
 	static std::string join(std::initializer_list<std::string> list, char cat = ' ')
 	{
 		std::ostringstream out;
@@ -262,8 +292,86 @@ private:
 		return out.str();
 	}
 
+	static obj::object* eval_int_infix(std::string const& op, const obj::integer* li, const obj::integer* ri)
+	{
+		if (op == "+")
+			return new obj::integer{li->value_ + ri->value_};
+		if (op == "-")
+			return new obj::integer{li->value_ - ri->value_};
+		if (op == "*")
+			return new obj::integer{li->value_ * ri->value_};
+		if (op == "/")
+			return new obj::integer{li->value_ / ri->value_};
+		if (op == "<")
+			return obj::boolean::make(li->value_ < ri->value_);
+		if (op == ">")
+			return obj::boolean::make(li->value_ > ri->value_);
+		if (op == "==")
+			return obj::boolean::make(li->value_ == ri->value_);
+		if (op == "!=")
+			return obj::boolean::make(li->value_ != ri->value_);
+
+		// unsupported operator
+		// return obj::nil::make();
+		return new err{e::unknown_operator, join({li->inspect(), op, ri->inspect()})};
+	}
+
+	static obj::object* eval_string_expr(std::string const& op, const obj::string* ls, const obj::string* rs)
+	{
+		if (op == "+")
+			return new obj::string{ls->value_ + rs->value_};
+		if (op == "==")
+			return obj::boolean::make(ls->value_ == rs->value_);
+		
+		return new err{e::unknown_operator, join({ls->inspect(), op, rs->inspect()})};
+	}
 	// obj::environment env_;
+	static std::unordered_map<std::string, obj::builtin> builtins;
+
+	static obj::object_ptr call(func* f, std::vector<obj::object_ptr>&& args)
+	{
+		// Env extendEnv(f->env_);
+		auto extendEnv = std::make_shared<Env>(f->env_);
+		for (int i = 0; i < args.size(); ++i)
+			extendEnv->set((*f->parameters_)[i]->value_, args[i].get());
+
+		auto res = eval(f->body_.get(), extendEnv);
+		CheckEvalErr(res);
+		return res->type() == obj::RETURN_VALUE ?
+			obj::object_ptr{ dynamic_cast<obj::return_value*>(res.get())->value_.release() }:
+			std::move(res);
+	}
+
+	static obj::object_ptr call(obj::builtin* b, std::vector<obj::object_ptr>&& args)
+	{
+		return b->fn_(std::move(args));
+	}
+
+	static obj::object_ptr eval_index_arr(const obj::object* arr, const obj::object* index)
+	{
+		obj::array::Elements const& elems = *static_cast<const obj::array*>(arr)->elements_;
+		std::int64_t idx = static_cast<const obj::integer*>(index)->value_;
+		return idx >= 0 && idx < elems.size() ?
+			obj::object_ptr{Env::clone_obj(elems[idx].get())} :
+			err::make(e::array, "out of range");
+	}
+
+	static obj::object_ptr eval_index_ht(const obj::object* ht, const obj::object_ptr& key)
+	{
+		obj::hashtable::HashTable const& h = *static_cast<const obj::hashtable*>(ht)->ht_;
+		if (!obj::hashtable::hashable(key->type())) {
+			return err::make(e::hashtable, "key is not hashable " + key->inspect());
+		}
+		if (!h.contains(key)) {
+			return obj::object_ptr{ obj::nil::make() };
+		}
+		// return obj::object_ptr{ obj::nil::make() };
+		return obj::object_ptr{ Env::clone_obj(h.at(key).get()) };
+	}
 }; // struct eval_handler
+
+// TODO move to source file
+std::unordered_map<std::string, obj::builtin> eval_handler::builtins = obj::builtin::create_builtins();
 
 template <typename EvalHandler = eval_handler>
 obj::object_ptr eval(ast::Program* program, std::shared_ptr<obj::environment> env)

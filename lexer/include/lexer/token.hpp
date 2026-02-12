@@ -30,9 +30,12 @@ const TokenType NEQ = "!=";
 
 const TokenType COMMA = ",";
 const TokenType SEMICOLON = ";";
+const TokenType COLON = ":";
 
 const TokenType LPAREN = "(";
 const TokenType RPAREN = ")";
+const TokenType LBRACKET = "[";
+const TokenType RBRACKET = "]";
 const TokenType LBRACE = "{";
 const TokenType RBRACE = "}";
 
@@ -45,7 +48,10 @@ const TokenType IF = "IF";
 const TokenType ELSE = "ELSE";
 const TokenType RETURN = "RETURN";
 
+const TokenType STRING = "STRING";
 
+
+// get the ident token_type
 TokenType lookup_ident(std::string ident);
 	
 }
